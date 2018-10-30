@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Predicate;
 
 public class SetupInheritNotificationsMigration implements Migration {
@@ -40,11 +41,10 @@ public class SetupInheritNotificationsMigration implements Migration {
 
     Predicate<Pipeline> missingInheritNotifications = p -> {
       Map config = (Map) p.get("config");
-      if(config..containsKey("configuration"))
-
-
-        return ("cron".equalsIgnoreCase(type) && (id == null || id.isEmpty()));
-      });
+      return Optional.of((Map) config.get("configuration"))
+        .map(configuration -> (List) configuration.get("inherit"))
+        .map(inherit -> inherit.contains("notifications"))
+        .orElse(false);
     };
 
     pipelineDAO.all().stream()
