@@ -7,10 +7,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.util.List;
 import java.util.ArrayList;
-import java.util.Map;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
 
@@ -45,41 +45,43 @@ public class SetupInheritNotificationsMigration implements Migration {
     Predicate<Pipeline> missingInheritNotifications = p -> {
       String type = (String) p.get("type");
 
-      if(!type.equals("templatedPipeline")) {
+      if (!"templatedPipeline".equals(type)) {
         return false;
       }
 
       Map config = (Map) p.getConfig();
 
-      return Optional.of((Map) config.get("configuration"))
+      return Optional.ofNullable((Map) config.get("configuration"))
         .map(configuration -> (List) configuration.get("inherit"))
-        .map(inherit -> inherit.contains("notifications"))
-        .orElse(false);
+        .map(inherit -> !inherit.contains("notifications"))
+        .orElse(true);
     };
 
     pipelineDAO.all().stream()
       .filter(missingInheritNotifications)
-      .forEach(pipeline -> migrate(pipelineDAO, pipeline));
+      .forEach(this::migrate);
   }
 
-  private void migrate(ItemDAO<Pipeline> dao, Pipeline pipeline) {
-    log.info(
-      "Added inherit notification configuration (application: {}, pipelineId: {}, config: {})",
-      pipeline.getApplication(),
-      pipeline.getId(),
-      pipeline.get("config")
+  @SuppressWarnings("unchecked")
+  private <V> V putOrGet(Map<String, V> map, String key, V valueIfMissing) {
+    V oldValue = map.putIfAbsent(key, valueIfMissing);
+    return oldValue == null ? valueIfMissing : oldValue;
+  }
+
+  @SuppressWarnings("unchecked")
+  private void migrate(Pipeline pipeline) {
+    log.info("Added inherit notification configuration (application: {}, pipelineId: {}, config: {})",
+        pipeline.getApplication(),
+        pipeline.getId(),
+        pipeline.get("config")
     );
 
-    Map<String, Object> config = (Map<String, Object>) pipeline.get("config");
-    config.putIfAbsent("configuration", new HashMap<String, Object>());
-
-    Map<String, Object> configuration = (Map<String, Object>) config.get("configuration");
-    configuration.putIfAbsent("inherit", new ArrayList<String>());
-
-    List<String> inherit = (List<String>) configuration.get("inherit");
+    Map<String, Map> config = (Map<String, Map>) pipeline.get("config");
+    Map<String, List> configuration = putOrGet(config, "configuration", new HashMap<String, List>());
+    List<String> inherit = putOrGet(configuration, "inherit", new ArrayList<String>());
     if (!inherit.contains("notifications")) {
       inherit.add("notifications");
     }
-    dao.update(pipeline.getId(), pipeline);
+    pipelineDAO.update(pipeline.getId(), pipeline);
   }
 }

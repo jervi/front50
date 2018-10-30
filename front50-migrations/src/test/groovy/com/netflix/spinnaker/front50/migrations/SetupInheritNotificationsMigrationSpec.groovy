@@ -15,8 +15,9 @@ class SetupInheritNotificationsMigrationSpec extends Specification {
     given:
     def pipeline = new Pipeline([
       application: "test",
+      id: "1337",
       type: "templatedPipeline",
-      config: []
+      config: [:]
     ])
 
     when:
@@ -24,11 +25,42 @@ class SetupInheritNotificationsMigrationSpec extends Specification {
 
     then:
     1 * pipelineDAO.all() >> { return [pipeline] }
+    1 * pipelineDAO.update("1337", pipeline)
 
     def config = (Map) pipeline.get("config")
     def configuration = (Map) config.get("configuration")
     def inherit = (List) configuration.get("inherit")
     inherit.contains("notifications")
+  }
+
+  def "should not add inherit configuration if it is already there"() {
+    given:
+    def pipeline = new Pipeline([
+      application: "test",
+      type: "templatedPipeline",
+      config: [
+        configuration: [
+          inherit: [
+            "notifications"
+          ],
+          someOtherThing: [
+            hello: "world"
+          ]
+        ]
+      ]
+    ])
+
+    when:
+    migration.run()
+
+    then:
+    1 * pipelineDAO.all() >> { return [pipeline] }
+    0 * pipelineDAO.update(_, _)
+
+    def config = (Map) pipeline.get("config")
+    def configuration = (Map) config.get("configuration")
+    def inherit = (List) configuration.get("inherit")
+    inherit == ["notifications"]
   }
 
 }
