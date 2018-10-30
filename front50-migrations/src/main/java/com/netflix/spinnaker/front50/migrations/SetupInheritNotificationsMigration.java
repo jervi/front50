@@ -1,6 +1,5 @@
 package com.netflix.spinnaker.front50.migrations;
 
-import com.netflix.spinnaker.front50.model.ItemDAO;
 import com.netflix.spinnaker.front50.model.pipeline.Pipeline;
 import com.netflix.spinnaker.front50.model.pipeline.PipelineDAO;
 import org.slf4j.Logger;
@@ -15,7 +14,7 @@ import java.util.Optional;
 import java.util.function.Predicate;
 
 public class SetupInheritNotificationsMigration implements Migration {
-  private static final Logger log = LoggerFactory.getLogger(SetupInheritNotificationsMigration.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SetupInheritNotificationsMigration.class);
 
   private final PipelineDAO pipelineDAO;
 
@@ -26,21 +25,12 @@ public class SetupInheritNotificationsMigration implements Migration {
 
   @Override
   public boolean isValid() {
-    return false;
+    return true;
   }
 
   @Override
   public void run() {
-    log.info("Starting inherit notifications migration");
-
-    /*
-    "config": {
-    "configuration": {
-      "inherit": [
-        "notifications"
-      ]
-    }
-     */
+    LOG.info("Starting inherit notifications migration");
 
     Predicate<Pipeline> missingInheritNotifications = p -> {
       String type = (String) p.get("type");
@@ -57,20 +47,16 @@ public class SetupInheritNotificationsMigration implements Migration {
         .orElse(true);
     };
 
-    pipelineDAO.all().stream()
+    pipelineDAO.all().parallelStream()
       .filter(missingInheritNotifications)
       .forEach(this::migrate);
-  }
 
-  @SuppressWarnings("unchecked")
-  private <V> V putOrGet(Map<String, V> map, String key, V valueIfMissing) {
-    V oldValue = map.putIfAbsent(key, valueIfMissing);
-    return oldValue == null ? valueIfMissing : oldValue;
+    LOG.info("Finished inherit notifications migration");
   }
 
   @SuppressWarnings("unchecked")
   private void migrate(Pipeline pipeline) {
-    log.info("Added inherit notification configuration (application: {}, pipelineId: {}, config: {})",
+    LOG.info("Adding inherit notification configuration (application: {}, pipelineId: {}, config: {})",
         pipeline.getApplication(),
         pipeline.getId(),
         pipeline.get("config")
@@ -83,5 +69,11 @@ public class SetupInheritNotificationsMigration implements Migration {
       inherit.add("notifications");
     }
     pipelineDAO.update(pipeline.getId(), pipeline);
+  }
+
+  @SuppressWarnings("unchecked")
+  private <V> V putOrGet(Map<String, V> map, String key, V valueIfMissing) {
+    V oldValue = map.putIfAbsent(key, valueIfMissing);
+    return oldValue == null ? valueIfMissing : oldValue;
   }
 }
